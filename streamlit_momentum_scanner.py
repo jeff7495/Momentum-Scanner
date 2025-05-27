@@ -25,11 +25,22 @@ tickers = [t.strip().upper() for t in tickers_input.split(",")]
 @st.cache_data
 def get_relative_volume(ticker, lookback):
     data = yf.download(ticker, period="30d", interval="1d")
+    
+    # Ensure data exists and has a 'Volume' column
     if data.empty or 'Volume' not in data.columns:
         return 0
-    avg_vol = data['Volume'][-lookback:].mean()
-    latest_vol = data['Volume'].iloc[-1]
+    
+    vol_series = data['Volume']
+    
+    # Ensure we have enough data
+    if len(vol_series) < lookback or vol_series.isnull().all():
+        return 0
+    
+    avg_vol = vol_series[-lookback:].mean()
+    latest_vol = vol_series.iloc[-1]
+
     return latest_vol / avg_vol if avg_vol else 0
+
 
 
 @st.cache_data
