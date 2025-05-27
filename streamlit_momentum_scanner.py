@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime
 
 # === CONFIG ===
-NEWS_API_KEY = 'YOUR_NEWSAPI_KEY'  # Replace with your NewsAPI key
+NEWS_API_KEY = st.secrets["NEWS_API_KEY"]
 RVOL_LOOKBACK = 20
 PRICE_MIN = 1
 PRICE_MAX = 20
@@ -14,8 +14,8 @@ PERCENT_CHANGE_MIN = 10
 REL_VOL_MIN = 5
 FLOAT_MAX = 10  # in millions
 
-# Placeholder float values (should use API or scraping in production)
-float_data = {'XYZ': 8.2, 'ABC': 7.9, 'TSLA': 2000, 'NVDA': 2400}
+# Placeholder float values (can be replaced with real API or scraper)
+float_data = {'XYZ': 8.2, 'ABC': 7.9, 'TSLA': 800, 'NVDA': 2000}
 
 # === Streamlit UI ===
 st.title("Ross Cameron-Style Momentum Scanner")
@@ -25,23 +25,14 @@ tickers = [t.strip().upper() for t in tickers_input.split(",")]
 @st.cache_data
 def get_relative_volume(ticker, lookback):
     data = yf.download(ticker, period="30d", interval="1d")
-    
-    # Ensure data exists and has a 'Volume' column
     if data.empty or 'Volume' not in data.columns:
         return 0
-    
     vol_series = data['Volume']
-    
-    # Ensure we have enough data
     if len(vol_series) < lookback or vol_series.isnull().all():
         return 0
-    
     avg_vol = vol_series[-lookback:].mean()
     latest_vol = vol_series.iloc[-1]
-
     return latest_vol / avg_vol if avg_vol else 0
-
-
 
 @st.cache_data
 def get_news(ticker):
@@ -59,8 +50,10 @@ def scan_tickers(tickers):
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
-            price = info['regularMarketPrice']
-            prev_close = info['previousClose']
+            price = info.get('regularMarketPrice', 0)
+            prev_close = info.get('previousClose', 0)
+            if price == 0 or prev_close == 0:
+                continue
             pct_change = ((price - prev_close) / prev_close) * 100
             rel_vol = get_relative_volume(ticker, RVOL_LOOKBACK)
             float_est = float_data.get(ticker, 999)
@@ -93,3 +86,4 @@ if st.button("Run Scanner"):
         st.dataframe(df)
     else:
         st.info("No qualifying stocks found.")
+
