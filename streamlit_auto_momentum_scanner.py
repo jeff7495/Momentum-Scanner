@@ -22,13 +22,23 @@ def get_top_gappers_from_finviz():
     headers = {"User-Agent": "Mozilla/5.0"}
     res = requests.get(url, headers=headers)
     soup = BeautifulSoup(res.text, "html.parser")
-    table = soup.find_all("table", class_="table-light")[2]
-    rows = table.find_all("tr")[1:]  # skip header
+    tables = soup.find_all("table", class_="table-light")
     tickers = []
-    for row in rows[:MAX_TICKERS]:
-        cols = row.find_all("td")
-        if len(cols) > 1:
-            tickers.append(cols[1].text.strip())
+
+    # Try to find any table with ticker symbols
+    for table in tables:
+        rows = table.find_all("tr")[1:]  # Skip header
+        for row in rows:
+            cols = row.find_all("td")
+            if len(cols) > 1:
+                ticker = cols[1].text.strip()
+                if ticker.isalpha() and ticker.upper() not in tickers:
+                    tickers.append(ticker.upper())
+            if len(tickers) >= MAX_TICKERS:
+                break
+        if tickers:
+            break
+
     return tickers
 
 @st.cache_data
@@ -54,9 +64,9 @@ def get_news(ticker):
 
 @st.cache_data
 def get_float_estimate(ticker):
-    # Placeholder float estimate. You can link to FMP or scrape Yahoo later.
+    # Placeholder float estimate
     est_floats = {'GME': 9.5, 'PLTR': 8.8, 'TSLA': 800, 'NVDA': 2000}
-    return est_floats.get(ticker, 5.0)  # Default to 5M for demonstration
+    return est_floats.get(ticker, 5.0)
 
 @st.cache_data
 def scan_tickers(tickers):
@@ -95,15 +105,20 @@ def scan_tickers(tickers):
     return pd.DataFrame(results)
 
 # === STREAMLIT UI ===
-st.title("ðŸ“ˆ Auto-Scanning Momentum Stocks (Ross Cameron Style)")
+st.title("📈 Auto-Scanning Momentum Stocks (Ross Cameron Style)")
 
-if st.button("ðŸ” Scan Top Gappers"):
-    tickers = get_top_gappers_from_finviz()
-    st.write("Scanning the following tickers:", ", ".join(tickers))
-    df = scan_tickers(tickers)
-    if not df.empty:
-        st.success("Momentum stocks found!")
-        st.dataframe(df)
-    else:
-        st.info("No qualifying stocks found.")
-
+if st.button("🔍 Scan Top Gappers"):
+    try:
+        tickers = get_top_gappers_from_finviz()
+        if not tickers:
+            st.error("❌ No tickers found — Finviz may have changed layout or blocked access.")
+        else:
+            st.write("Scanning the following tickers:", ", ".join(tickers))
+            df = scan_tickers(tickers)
+            if not df.empty:
+                st.success("Momentum stocks found!")
+                st.dataframe(df)
+            else:
+                st.info("No qualifying stocks found.")
+    except Exception as e:
+        st.error(f"⚠️ Error while scanning top gappers: {e}")
