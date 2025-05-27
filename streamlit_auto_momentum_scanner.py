@@ -1,9 +1,9 @@
-
 import streamlit as st
 import yfinance as yf
 import requests
 import pandas as pd
 from datetime import datetime
+from bs4 import BeautifulSoup
 
 # === CONFIG ===
 NEWS_API_KEY = st.secrets["NEWS_API_KEY"]
@@ -13,14 +13,23 @@ PRICE_MAX = 20
 PERCENT_CHANGE_MIN = 10
 REL_VOL_MIN = 5
 FLOAT_MAX = 10  # in millions
+MAX_TICKERS = 20  # limit scan to top 20
 
-# Placeholder float values (can be replaced with real API or scraper)
-float_data = {'XYZ': 8.2, 'ABC': 7.9, 'TSLA': 800, 'NVDA': 2000}
-
-# === Streamlit UI ===
-st.title("Ross Cameron-Style Momentum Scanner")
-tickers_input = st.text_input("Enter tickers (comma-separated)", "XYZ,ABC,TSLA,NVDA")
-tickers = [t.strip().upper() for t in tickers_input.split(",")]
+# === FUNCTIONS ===
+@st.cache_data
+def get_top_gappers_from_finviz():
+    url = "https://finviz.com/screener.ashx?v=111&s=ta_topgainers&f=sh_price_u20,sh_avgvol_o500&ft=4"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers)
+    soup = BeautifulSoup(res.text, "html.parser")
+    table = soup.find_all("table", class_="table-light")[2]
+    rows = table.find_all("tr")[1:]  # skip header
+    tickers = []
+    for row in rows[:MAX_TICKERS]:
+        cols = row.find_all("td")
+        if len(cols) > 1:
+            tickers.append(cols[1].text.strip())
+    return tickers
 
 @st.cache_data
 def get_relative_volume(ticker, lookback):
@@ -44,6 +53,12 @@ def get_news(ticker):
     return None
 
 @st.cache_data
+def get_float_estimate(ticker):
+    # Placeholder float estimate. You can link to FMP or scrape Yahoo later.
+    est_floats = {'GME': 9.5, 'PLTR': 8.8, 'TSLA': 800, 'NVDA': 2000}
+    return est_floats.get(ticker, 5.0)  # Default to 5M for demonstration
+
+@st.cache_data
 def scan_tickers(tickers):
     results = []
     for ticker in tickers:
@@ -56,7 +71,7 @@ def scan_tickers(tickers):
                 continue
             pct_change = ((price - prev_close) / prev_close) * 100
             rel_vol = get_relative_volume(ticker, RVOL_LOOKBACK)
-            float_est = float_data.get(ticker, 999)
+            float_est = get_float_estimate(ticker)
             news_headline = get_news(ticker)
 
             if (
@@ -79,7 +94,12 @@ def scan_tickers(tickers):
             st.warning(f"Error with {ticker}: {e}")
     return pd.DataFrame(results)
 
-if st.button("Run Scanner"):
+# === STREAMLIT UI ===
+st.title("ðŸ“ˆ Auto-Scanning Momentum Stocks (Ross Cameron Style)")
+
+if st.button("ðŸ” Scan Top Gappers"):
+    tickers = get_top_gappers_from_finviz()
+    st.write("Scanning the following tickers:", ", ".join(tickers))
     df = scan_tickers(tickers)
     if not df.empty:
         st.success("Momentum stocks found!")
